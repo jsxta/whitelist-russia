@@ -13,7 +13,7 @@
 - *Подходит при работе по белым спискам (CIDR)*
 
 #
-***[ПОДПИСКА](https://duckduckgo.com)***
+***[ПОДПИСКА](https://gbr.mydan.online/configs)***
 
 ![alt text](qr-code.png)
 
