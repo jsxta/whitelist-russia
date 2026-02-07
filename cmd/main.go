@@ -22,27 +22,6 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var wg sync.WaitGroup
-
-	newDataExist := make(chan struct{}, 1)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var tick = time.NewTicker(config.UpdateCooldown)
-		defer tick.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				close(newDataExist)
-				return
-			case <-tick.C:
-				select {
-				case newDataExist <- struct{}{}:
-				default:
-				}
-
-			}
-		}
-	}()
 	tester := services.NewVlessTestService(config.TestURL)
 	cache := services.NewCache()
 	dataSource := services.NewUrlParser(config.VlessSecureConfigsURLs, config.CIDRWhitelistURL, config.URLsWhitelistURL)
@@ -59,17 +38,23 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		tick := time.NewTicker(5 * time.Second)
+		tick := time.NewTicker(time.Second)
 		defer tick.Stop()
+		updateTick := time.NewTicker(config.UpdateCooldown)
+		defer updateTick.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-newDataExist:
+			case <-updateTick.C:
+				tick.Reset(time.Second)
+				log.Println("Configs updating...")
 				if err := updater.AddConfigsToCacheFromSource(); err != nil {
 					log.Println(err)
 				}
+				updateTick.Reset(config.UpdateCooldown)
 			case <-tick.C:
+				tick.Reset(time.Minute)
 				if err := updater.AddAvailableConfigsToCache(); err != nil {
 					log.Println(err)
 				}
@@ -92,7 +77,7 @@ func main() {
 	}()
 
 	pprofSrv := &http.Server{
-		Addr: "0.0.0.0:6060",
+		Addr: "127.0.0.1:6060",
 	}
 
 	go func() {
@@ -104,6 +89,7 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	<-sigCh
+	log.Println("Termination signal received, shutting down...")
 	cancel()
 	ctxShutdown, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelShutdown()

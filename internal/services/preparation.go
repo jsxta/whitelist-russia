@@ -124,13 +124,14 @@ func (p *UrlParser) ParseConfigs() ([]*models.VlessConfig, error) {
 
 			fragment := u.Fragment
 			link := deleteFragment(line)
-			configs[link] = fragment
+			key, _ := getKeyByUrl(link)
+			configs[key] = link + "#" + fragment
 		}
 	}
 	result := make([]*models.VlessConfig, 0, len(configs))
-	for url, fragment := range configs {
+	for _, fullUrl := range configs {
 		result = append(result, &models.VlessConfig{
-			URL: url + "#" + fragment,
+			URL: fullUrl,
 		})
 	}
 	return result, nil
@@ -191,4 +192,13 @@ func deleteFragment(s string) string {
 		}
 	}
 	return s
+}
+
+func getKeyByUrl(link string) (string, error) {
+	parsedUrl, err := url.Parse(link)
+	if err != nil {
+		return "", err
+	}
+	key := parsedUrl.Scheme + "://" + parsedUrl.User.String() + "@" + parsedUrl.Host
+	return key, nil
 }

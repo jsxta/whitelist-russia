@@ -36,7 +36,7 @@ func (u *ConfigUpdater) RunTest(configs []*models.VlessConfig) {
 	defer func() {
 		log.Printf("woriking time (test): %s\n", time.Since(start))
 	}()
-	u.URLTestService.TestConfigs(configs, len(configs)/4)
+	u.URLTestService.TestConfigs(configs, len(configs)/32)
 
 }
 
@@ -62,21 +62,17 @@ func (u *ConfigUpdater) AddConfigsToCacheFromSource() error {
 	} else {
 		prevMap := make(map[string]models.VlessConfig, len(prevConfigs))
 		for i := 0; i < len(prevConfigs); i++ {
-			pre := prevConfigs[i].URL
-			link, err := url.Parse(pre)
+			key, err := getKeyByUrl(prevConfigs[i].URL)
 			if err != nil {
 				continue
 			}
-			key := link.Scheme + "://" + link.User.String() + "@" + link.Host
 			prevMap[key] = prevConfigs[i]
 		}
 		for i := 0; i < len(filtered); i++ {
-			pre := filtered[i].URL
-			link, err := url.Parse(pre)
+			key, err := getKeyByUrl(filtered[i].URL)
 			if err != nil {
 				continue
 			}
-			key := link.Scheme + "://" + link.User.String() + "@" + link.Host
 			prevMap[key] = filtered[i]
 		}
 		result := make([]models.VlessConfig, 0, len(prevMap))
