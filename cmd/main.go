@@ -8,6 +8,7 @@ import (
 	"gibraltar/internal/services"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"sync"
@@ -84,11 +85,20 @@ func main() {
 		Handler: router.Handler(),
 	}
 	go func() {
-		err = srv.ListenAndServe()
-		if err != nil {
-			log.Fatalln(err)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Println("http server error:", err)
 		}
 
+	}()
+
+	pprofSrv := &http.Server{
+		Addr: "0.0.0.0:6060",
+	}
+
+	go func() {
+		if err := pprofSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Println("pprof server error:", err)
+		}
 	}()
 
 	sigCh := make(chan os.Signal, 1)
@@ -99,6 +109,7 @@ func main() {
 	defer cancelShutdown()
 
 	_ = srv.Shutdown(ctxShutdown)
+	_ = pprofSrv.Shutdown(ctxShutdown)
 	wg.Wait()
 
 }

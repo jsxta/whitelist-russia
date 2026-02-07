@@ -10,12 +10,6 @@ import (
 	"strings"
 )
 
-type DataParser interface {
-	ParseConfigs() ([]*models.VlessConfig, error)
-	ParseSubnets() (map[string]struct{}, error)
-	ParseSNIs() (map[string]struct{}, error)
-}
-
 type FileParser struct {
 	ConifgPath string
 	IPListPath string

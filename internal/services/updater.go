@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+type DataParser interface {
+	ParseConfigs() ([]*models.VlessConfig, error)
+	ParseSubnets() (map[string]struct{}, error)
+	ParseSNIs() (map[string]struct{}, error)
+}
+
 type ConfigUpdater struct {
 	Cache          *Cache
 	Filter         *ConfigFilter
@@ -30,7 +36,7 @@ func (u *ConfigUpdater) RunTest(configs []*models.VlessConfig) {
 	defer func() {
 		log.Printf("woriking time (test): %s\n", time.Since(start))
 	}()
-	u.URLTestService.TestConfigs(configs, len(configs)/32)
+	u.URLTestService.TestConfigs(configs, len(configs)/4)
 
 }
 
@@ -55,15 +61,29 @@ func (u *ConfigUpdater) AddConfigsToCacheFromSource() error {
 		u.Cache.Set(config.AllKey, filtered)
 	} else {
 		prevMap := make(map[string]models.VlessConfig, len(prevConfigs))
-		for i := range prevConfigs {
-			prevMap[prevConfigs[i].URL] = prevConfigs[i]
-		}
-		for i := range filtered {
-			if _, ok := prevMap[filtered[i].URL]; !ok {
-				prevConfigs = append(prevConfigs, filtered[i])
+		for i := 0; i < len(prevConfigs); i++ {
+			pre := prevConfigs[i].URL
+			link, err := url.Parse(pre)
+			if err != nil {
+				continue
 			}
+			key := link.Scheme + "://" + link.User.String() + "@" + link.Host
+			prevMap[key] = prevConfigs[i]
 		}
-		u.Cache.Set(config.AllKey, prevConfigs)
+		for i := 0; i < len(filtered); i++ {
+			pre := filtered[i].URL
+			link, err := url.Parse(pre)
+			if err != nil {
+				continue
+			}
+			key := link.Scheme + "://" + link.User.String() + "@" + link.Host
+			prevMap[key] = filtered[i]
+		}
+		result := make([]models.VlessConfig, 0, len(prevMap))
+		for _, v := range prevMap {
+			result = append(result, v)
+		}
+		u.Cache.Set(config.AllKey, result)
 
 	}
 
