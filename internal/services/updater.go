@@ -73,6 +73,9 @@ func (u *ConfigUpdater) AddConfigsToCacheFromSource() error {
 			if err != nil {
 				continue
 			}
+			if old, ok := prevMap[key]; ok {
+				filtered[i].Stability = old.Stability
+			}
 			prevMap[key] = filtered[i]
 		}
 		result := make([]models.VlessConfig, 0, len(prevMap))
@@ -101,7 +104,9 @@ func (u *ConfigUpdater) AddAvailableConfigsToCache() error {
 	}
 	u.RunTest(pointers)
 	availableList := deleteDuplicates(filterConfigsByStability(pointers))
-	u.Cache.Set(config.AvailableKey, *availableList)
+	if len(*availableList) != 0 {
+		u.Cache.Set(config.AvailableKey, *availableList)
+	}
 	return nil
 }
 
