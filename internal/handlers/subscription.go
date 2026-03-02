@@ -26,9 +26,9 @@ func (h *ConfigsHandler) CurrentAvailableConfigs(c *gin.Context) {
 		})
 		return
 	}
-	resultString := ""
+	resultString := config.Tags
 	for _, v := range configs {
-		resultString += v.URL + "\n"
+		resultString += v.GetURL() + "\n"
 	}
 	c.String(http.StatusOK, resultString)
 }

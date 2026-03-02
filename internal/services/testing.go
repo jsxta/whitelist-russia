@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	models "gibraltar/internal/models"
+	"gibraltar/internal/services/beans"
 	"log"
 	"net"
 	"net/http"
@@ -19,6 +20,11 @@ import (
 	"golang.org/x/net/proxy"
 )
 
+type AnyBuilder interface {
+	models.AnyConfig
+	BuildOutbound() map[string]any
+}
+
 type URLTestService struct {
 	URL string
 }
@@ -29,10 +35,10 @@ func NewVlessTestService(url string) *URLTestService {
 	}
 }
 
-func (t *URLTestService) Test(config *models.VlessConfig, localPort int) (time.Duration, error) {
-	outbound := buildVlessOutbound(config)
-	singBoxConfig := buildSingBoxConfig(outbound, localPort)
-	pattern := fmt.Sprintf("singbox-config-*-%s.json", config.Server)
+func (t *URLTestService) Test(config AnyBuilder, localPort int) (time.Duration, error) {
+	outbound := config.BuildOutbound()
+	singBoxConfig := beans.BuildSingBoxConfig(outbound, localPort)
+	pattern := fmt.Sprintf("singbox-config-*-%s.json", config.GetServer())
 	tmp, err := os.CreateTemp("", pattern)
 	if err != nil {
 		return 0 * time.Millisecond, fmt.Errorf("create temp config: %w", err)
@@ -84,7 +90,7 @@ func (t *URLTestService) Test(config *models.VlessConfig, localPort int) (time.D
 		Timeout:   10 * time.Second,
 	}
 
-	switch config.Type {
+	switch config.GetType() {
 	case "grpc":
 		trace := &httptrace.ClientTrace{}
 		req, err := http.NewRequest("GET", "https://www.cloudflare.com/cdn-cgi/trace", nil)
@@ -155,7 +161,7 @@ func TLSTest(address, port, serverName string, timeout time.Duration) (time.Dura
 	return time.Since(start), nil
 }
 
-func (t *URLTestService) TestConfigs(configs []*models.VlessConfig, workersCount int) {
+func (t *URLTestService) TestConfigs(configs []models.AnyConfig, workersCount int) {
 	log.Printf("%d configs will be tested\n", len(configs))
 	ports := make([]int, 0, workersCount)
 	for i := 0; i < workersCount; i++ {
@@ -183,19 +189,33 @@ func (t *URLTestService) TestConfigs(configs []*models.VlessConfig, workersCount
 	wg.Wait()
 }
 
-func (t *URLTestService) setTestResultValue(config *models.VlessConfig, localPort int) {
-	time, err := TLSTest(config.Server, strconv.Itoa(config.Port), config.SNI, 2*time.Second)
+func (t *URLTestService) setTestResultValue(config models.AnyConfig, localPort int) {
+	time, err := TLSTest(config.GetServer(), strconv.Itoa(config.GetPort()), config.GetSNI(), 2*time.Second)
 	if time <= 0 || err != nil {
-		config.TestResult = -1
-		config.Stability = onFailure(config.Stability)
+		config.SetTestResult(-1)
+		config.SetStability(onFailure(config.GetStability()))
 		return
 	}
-	lat, err := t.Test(config, localPort)
+
+	builder := NewBuilder(config)
+	lat, err := t.Test(builder, localPort)
 	if err != nil {
-		config.TestResult = -1
-		config.Stability = onFailure(config.Stability)
+		config.SetTestResult(-1)
+		config.SetStability(onFailure(config.GetStability()))
 	} else {
-		config.TestResult = int(lat.Milliseconds())
-		config.Stability = onSuccess(config.Stability)
+		config.SetTestResult(int(lat.Milliseconds()))
+		config.SetStability(onSuccess(config.GetStability()))
 	}
+}
+
+func NewBuilder(config models.AnyConfig) AnyBuilder {
+	switch v := config.(type) {
+	case *models.VlessConfig:
+		return &beans.VlessBuilder{VlessConfig: v}
+	case *models.TrojanConfig:
+		return &beans.TrojanBuilder{TrojanConfig: v}
+	case *models.ShadowsocksConfig:
+		return &beans.ShadowsocksBuilder{ShadowsocksConfig: v}
+	}
+	return nil
 }

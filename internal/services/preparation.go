@@ -40,7 +40,9 @@ func (p *FileParser) ParseConfigs() ([]*models.VlessConfig, error) {
 			continue
 		}
 		config := &models.VlessConfig{
-			URL: line,
+			BaseConfig: models.BaseConfig{
+				URL: line,
+			},
 		}
 
 		configs = append(configs, config)
@@ -94,7 +96,7 @@ func NewUrlParser(configsURLs []string, ipListURL, snisURL string) *UrlParser {
 	}
 }
 
-func (p *UrlParser) ParseConfigs() ([]*models.VlessConfig, error) {
+func (p *UrlParser) ParseConfigs() ([]models.AnyConfig, error) {
 	configs := make(map[string]string)
 	for _, source := range p.ConfigsURLs {
 		resp, err := http.Get(source)
@@ -102,7 +104,6 @@ func (p *UrlParser) ParseConfigs() ([]*models.VlessConfig, error) {
 			log.Println(err)
 			continue
 		}
-		defer resp.Body.Close()
 		scanner := bufio.NewScanner(resp.Body)
 
 		for scanner.Scan() {
@@ -118,7 +119,20 @@ func (p *UrlParser) ParseConfigs() ([]*models.VlessConfig, error) {
 			}
 			q := u.Query()
 			security := strings.TrimSpace(strings.ToLower(q.Get("security")))
-			if security == "none" || security == "" {
+			switch u.Scheme {
+			case "vless":
+				if security == "none" || security == "" {
+					continue
+				}
+			case "trojan":
+				if security == "none" {
+					continue
+				}
+			case "ss":
+				if security == "none" {
+					continue
+				}
+			default:
 				continue
 			}
 
@@ -127,12 +141,28 @@ func (p *UrlParser) ParseConfigs() ([]*models.VlessConfig, error) {
 			key, _ := getKeyByUrl(link)
 			configs[key] = link + "#" + fragment
 		}
+		resp.Body.Close()
 	}
-	result := make([]*models.VlessConfig, 0, len(configs))
+	result := make([]models.AnyConfig, 0, len(configs))
 	for _, fullUrl := range configs {
-		result = append(result, &models.VlessConfig{
-			URL: fullUrl,
-		})
+		u, _ := url.Parse(fullUrl)
+		var config models.AnyConfig
+
+		switch u.Scheme {
+		case "vless":
+			c := &models.VlessConfig{BaseConfig: models.BaseConfig{URL: fullUrl}}
+			config = c
+		case "trojan":
+			c := &models.TrojanConfig{BaseConfig: models.BaseConfig{URL: fullUrl}}
+			config = c
+		case "ss":
+			c := &models.ShadowsocksConfig{BaseConfig: models.BaseConfig{URL: fullUrl}}
+			config = c
+		default:
+			continue
+		}
+
+		result = append(result, config)
 	}
 	return result, nil
 }

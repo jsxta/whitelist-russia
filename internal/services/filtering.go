@@ -17,8 +17,8 @@ func NewConfigFilter(allowedSubnets map[string]struct{}, allowedSNIs map[string]
 	}
 }
 
-func (f ConfigFilter) IsAvailableConfig(config *models.VlessConfig) (bool, error) {
-	ok, err := f.isIPFromWhitelist(config.Server)
+func (f ConfigFilter) IsAvailableConfig(config models.AnyConfig) (bool, error) {
+	ok, err := f.isIPFromWhitelist(config.GetServer())
 	if !ok {
 		return false, err
 	}

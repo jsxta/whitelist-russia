@@ -46,6 +46,9 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return
+			default:
+			}
+			select {
 			case <-updateTick.C:
 				tick.Reset(time.Second)
 				log.Println("Configs updating...")
