@@ -21,7 +21,7 @@ func NewConfigsHandler(cache *services.Cache) *ConfigsHandler {
 func (h *ConfigsHandler) CurrentAvailableConfigs(c *gin.Context) {
 	configs, ok := h.Cache.Get(config.AvailableKey)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusNoContent, gin.H{
 			"error": "configs unavailable retry later",
 		})
 		return
