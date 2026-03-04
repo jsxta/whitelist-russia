@@ -19,16 +19,12 @@ func NewConfigsHandler(cache *services.Cache) *ConfigsHandler {
 }
 
 func (h *ConfigsHandler) CurrentAvailableConfigs(c *gin.Context) {
-	configs, ok := h.Cache.Get(config.AvailableKey)
+	configs, ok := h.Cache.GetString(config.AvailableKey)
 	if !ok {
 		c.JSON(http.StatusNoContent, gin.H{
 			"error": "configs unavailable retry later",
 		})
 		return
 	}
-	resultString := config.Tags
-	for _, v := range configs {
-		resultString += v.GetURL() + "\n"
-	}
-	c.String(http.StatusOK, resultString)
+	c.String(http.StatusOK, config.Tags+configs)
 }
