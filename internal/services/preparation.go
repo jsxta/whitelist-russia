@@ -2,7 +2,10 @@ package services
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/base64"
 	"gibraltar/internal/models"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -10,17 +13,21 @@ import (
 	"strings"
 )
 
-type FileParser struct {
-	ConifgPath string
-	IPListPath string
-	SNIsPath   string
+type IPListSource interface {
+	ParseSubnets() (map[string]struct{}, error)
 }
 
-func NewFileParser(configPath, ipListPath, snisPath string) *FileParser {
+type FileParser struct {
+	ConifgPath   string
+	IPListSource IPListSource
+	SNIsPath     string
+}
+
+func NewFileParser(configPath, snisPath string, IPListSource IPListSource) *FileParser {
 	return &FileParser{
-		ConifgPath: configPath,
-		IPListPath: ipListPath,
-		SNIsPath:   snisPath,
+		ConifgPath:   configPath,
+		IPListSource: IPListSource,
+		SNIsPath:     snisPath,
 	}
 }
 
@@ -50,8 +57,12 @@ func (p *FileParser) ParseConfigs() ([]*models.VlessConfig, error) {
 	return configs, nil
 }
 
-func (p *FileParser) ParseSubnets() (map[string]struct{}, error) {
-	file, err := os.Open(p.IPListPath)
+type FileIPList struct {
+	Path string
+}
+
+func (s *FileIPList) ParseSubnets() (map[string]struct{}, error) {
+	file, err := os.Open(s.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -83,16 +94,16 @@ func (p *FileParser) GetSNIsFromFile() (map[string]struct{}, error) {
 }
 
 type UrlParser struct {
-	ConfigsURLs []string
-	IPListURL   string
-	SNIsURL     string
+	ConfigsURLs  []string
+	IPListSource IPListSource
+	SNIsURL      string
 }
 
-func NewUrlParser(configsURLs []string, ipListURL, snisURL string) *UrlParser {
+func NewUrlParser(configsURLs []string, snisURL string, IPListSource IPListSource) *UrlParser {
 	return &UrlParser{
-		ConfigsURLs: configsURLs,
-		IPListURL:   ipListURL,
-		SNIsURL:     snisURL,
+		ConfigsURLs:  configsURLs,
+		IPListSource: IPListSource,
+		SNIsURL:      snisURL,
 	}
 }
 
@@ -104,10 +115,12 @@ func (p *UrlParser) ParseConfigs() ([]models.AnyConfig, error) {
 			log.Println(err)
 			continue
 		}
-		scanner := bufio.NewScanner(resp.Body)
 
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
+		body, _ := io.ReadAll(resp.Body)
+		content := decodeIfBase64(string(body))
+
+		for _, line := range strings.Split(string(content), "\n") {
+			line = strings.TrimSpace(line)
 			line = strings.ReplaceAll(line, "&amp;", "&")
 
 			if line == "" {
@@ -167,8 +180,12 @@ func (p *UrlParser) ParseConfigs() ([]models.AnyConfig, error) {
 	return result, nil
 }
 
-func (p *UrlParser) ParseSubnets() (map[string]struct{}, error) {
-	resp, err := http.Get(p.IPListURL)
+type URLIPList struct {
+	URL string
+}
+
+func (s *URLIPList) ParseSubnets() (map[string]struct{}, error) {
+	resp, err := http.Get(s.URL)
 	if err != nil {
 		return nil, err
 	}
@@ -229,6 +246,33 @@ func getKeyByUrl(link string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	key := parsedUrl.Scheme + "://" + parsedUrl.User.String() + "@" + parsedUrl.Host
+	key := parsedUrl.String()
 	return key, nil
+}
+
+func decodeIfBase64(data string) string {
+	if strings.Contains(data, "://") {
+		return data
+	}
+
+	trimmed := strings.TrimSpace(data)
+
+	padded := trimmed
+	if pad := len(padded) % 4; pad != 0 {
+		padded += strings.Repeat("=", 4-pad)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(padded)
+	if err != nil {
+		decoded, err = base64.URLEncoding.DecodeString(padded)
+		if err != nil {
+			return data
+		}
+	}
+
+	if !bytes.Contains(decoded, []byte("://")) {
+		return data
+	}
+
+	return string(decoded)
 }

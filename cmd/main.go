@@ -24,8 +24,9 @@ func main() {
 	var wg sync.WaitGroup
 	tester := services.NewVlessTestService(config.TestURL)
 	cache := services.NewCache()
-	dataSource := services.NewUrlParser(config.VlessSecureConfigsURLs, config.CIDRWhitelistURL, config.URLsWhitelistURL)
-	CIDRlist, err := dataSource.ParseSubnets()
+	ipSource := &services.FileIPList{Path: config.CIDRWhitelistFile}
+	dataSource := services.NewUrlParser(config.VlessSecureConfigsURLs, config.URLsWhitelistURL, ipSource)
+	CIDRlist, err := dataSource.IPListSource.ParseSubnets()
 	if err != nil {
 		panic(fmt.Errorf("Can't get CIDR whitelist: %s", err))
 	}

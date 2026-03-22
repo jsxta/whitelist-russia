@@ -13,7 +13,6 @@ import (
 
 type DataParser interface {
 	ParseConfigs() ([]models.AnyConfig, error)
-	ParseSubnets() (map[string]struct{}, error)
 	ParseSNIs() (map[string]struct{}, error)
 }
 
@@ -38,7 +37,7 @@ func (u *ConfigUpdater) RunTest(configs []models.AnyConfig) {
 	defer func() {
 		log.Printf("woriking time (test): %s\n", time.Since(start))
 	}()
-	u.URLTestService.TestConfigs(configs, len(configs)/32)
+	u.URLTestService.TestConfigs(configs, config.WorkersCount)
 
 }
 
