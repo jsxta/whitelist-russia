@@ -4,6 +4,7 @@ import (
 	"gibraltar/config"
 	"gibraltar/internal/services"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,5 +27,13 @@ func (h *ConfigsHandler) CurrentAvailableConfigs(c *gin.Context) {
 		})
 		return
 	}
-	c.String(http.StatusOK, config.Tags+configs)
+	showTags, err := strconv.ParseBool(c.Query("tags"))
+	if err != nil {
+		showTags = true
+	}
+	var resultString = configs
+	if showTags {
+		resultString = config.Tags + resultString
+	}
+	c.String(http.StatusOK, resultString)
 }
